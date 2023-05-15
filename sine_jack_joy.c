@@ -14,12 +14,7 @@
 
 gcc -o sine_jack_joy_midi sine_jack_joy_midi.c -ljack -lm -lasound
 
-
 */
-
-
-
-
 
 jack_port_t *output_port;
 jack_client_t *client;
@@ -141,11 +136,23 @@ int main() {
 		    /* Update frequency based on joystick position */
 		    amplitude = abs(js.value / 32767);
 		}
+		if (js.type == JS_EVENT_AXIS && js.number == 4) {
+		    /* Update frequency based on joystick position */
+		    //amplitude = abs(js.value / 32767);
 
+			// assign PB channel based on axis
+			channel = 0; 
+			//invert_axis = 1;
 
+			//int pitchbend_val = ((js.value + 32767) / );
+			int pitchbend_val = (js.value  / 4 );
 
+			// Set the MIDI event to a pitchbend event
+			midi_event.type = SND_SEQ_EVENT_PITCHBEND;
+			midi_event.data.control.channel = channel;
+			midi_event.data.control.value = pitchbend_val;
 
-
+		}
 		if (js.type == JS_EVENT_BUTTON) {
 	        /* Update frequency based on joystick position */
 	        //amplitude = abs(js.value / 32767);
