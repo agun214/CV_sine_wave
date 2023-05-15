@@ -1,14 +1,3 @@
-/* 
-Sine wave CV generator for Raspberry Pi 4 with HiFiberry DAC ADC pro
-
-
-sudo apt-get install libjack-jackd2-dev
-
-gcc -o sine_jack_joy sine_jack_joy.c -ljack -lm
-
-./sine_jack_joy
-
-*/
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -18,6 +7,19 @@ gcc -o sine_jack_joy sine_jack_joy.c -ljack -lm
 #include <fcntl.h>
 #include <linux/joystick.h>
 #include <jack/ringbuffer.h>
+//#include <libevdev-1.0/libevdev/libevdev.h>
+#include <alsa/asoundlib.h>
+
+/*
+
+gcc -o sine_jack_joy_midi sine_jack_joy_midi.c -ljack -lm -lasound
+
+
+*/
+
+
+
+
 
 jack_port_t *output_port;
 jack_client_t *client;
@@ -94,7 +96,36 @@ int main() {
         exit(1);
     }
 
+    // Open a MIDI device
+    snd_seq_t* midi = NULL;
+    snd_seq_open(&midi, "default", SND_SEQ_OPEN_OUTPUT, 0);
+    snd_seq_set_client_name(midi, "Gamepad MIDI");
+
+    // Create a MIDI port
+    int port = snd_seq_create_simple_port(midi, "Gamepad", SND_SEQ_PORT_CAP_READ|SND_SEQ_PORT_CAP_SUBS_READ, SND_SEQ_PORT_TYPE_MIDI_GENERIC);
+
+	// Create MIDI number note array
+	const int NOTE_MAP[] = {60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76};
+	int channel = 0;
+	int invert_axis = 1;
+
+	int note_index = -1;
+
+
 	while (1) {
+
+        // Translate input event into MIDI message
+        snd_seq_event_t midi_event;
+        snd_seq_ev_clear(&midi_event);
+        snd_seq_ev_set_source(&midi_event, port);
+        snd_seq_ev_set_subs(&midi_event);
+        snd_seq_ev_set_direct(&midi_event);
+
+
+
+
+
+
 		/* Read joystick events */
 		if (read(joystick_fd, &js, sizeof(js)) == -1) {
 		    /* Error reading joystick */
@@ -102,12 +133,47 @@ int main() {
 		}
 
 		/* Check if it is an axis event */
-		if (js.type == JS_EVENT_AXIS) {
-		    /* Check if it is the X axis */
-		    if (js.number == 0) {
-		        /* Update frequency based on joystick position */
-		        frequency = ((js.value + 32767) / 3276.7);
-		    }
+		if (js.type == JS_EVENT_AXIS && js.number == 0) {		    
+	        /* Update frequency based on joystick position */
+	        frequency = ((js.value + 32767) / 3276.7);
+		}
+		if (js.type == JS_EVENT_AXIS && js.number == 1) {
+		    /* Update frequency based on joystick position */
+		    amplitude = abs(js.value / 32767);
+		}
+
+
+
+
+
+		if (js.type == JS_EVENT_BUTTON) {
+	        /* Update frequency based on joystick position */
+	        //amplitude = abs(js.value / 32767);
+	    
+			note_index = js.number;
+	
+/*			switch (js.number) {
+				case ABS_HAT0X: note_index = 12; break;
+				case ABS_HAT0Y:	note_index = 13; break;
+				case ABS_Z: note_index = 14; break;
+				case ABS_RZ: note_index = 15; break;
+			}    */
+   			
+
+			if (js.value != -1) {
+				if (js.value != 0) {
+					midi_event.type = SND_SEQ_EVENT_NOTEON;
+					midi_event.data.note.channel = 0;
+					midi_event.data.note.note = NOTE_MAP[note_index];
+					midi_event.data.note.velocity = 127;
+				} else {
+					midi_event.type = SND_SEQ_EVENT_NOTEOFF;
+					midi_event.data.note.channel = 0;
+					midi_event.data.note.note = NOTE_MAP[note_index];
+					midi_event.data.note.velocity = 0;
+				}
+			}
+
 		}
 
 		/* Process audio buffer */
@@ -118,9 +184,16 @@ int main() {
 		out = jack_port_get_buffer(output_port, buffer_size);
 		jack_ringbuffer_read(output_ringbuffer, (void *)out, buffer_size * sizeof(float));
 
+        snd_seq_event_output(midi, &midi_event);
+        snd_seq_drain_output(midi);
+
+
+
 		/* Sleep for a short while to prevent busy waiting */
 		usleep(1000);
 	}
 	jack_client_close(client);
+    snd_seq_close(midi);
+
     exit(0);
 }
