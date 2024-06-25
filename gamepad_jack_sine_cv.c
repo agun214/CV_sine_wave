@@ -10,7 +10,7 @@
 #include <alsa/asoundlib.h>
 /*
 
-gcc -o gamepad_jack_cv_sine4 gamepad_jack_cv_sine4.c -ljack -lm -lasound
+gcc -o gamepad_jack_sine_cv gamepad_jack_sine_cv.c -ljack -lm -lasound
 
 */
 
