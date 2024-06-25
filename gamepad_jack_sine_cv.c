@@ -7,7 +7,7 @@
 #include <fcntl.h>
 #include <linux/joystick.h>
 #include <jack/ringbuffer.h>
-
+#include <alsa/asoundlib.h>
 /*
 
 gcc -o gamepad_jack_cv_sine4 gamepad_jack_cv_sine4.c -ljack -lm -lasound
@@ -137,6 +137,14 @@ int main(int argc, char **argv) {
         printf("Cannot activate client");
         exit(1);
     }
+    // Open a MIDI device
+    snd_seq_t* midi = NULL;
+    snd_seq_open(&midi, "default", SND_SEQ_OPEN_OUTPUT, 0);
+    snd_seq_set_client_name(midi, "Gamepad MIDI");
+
+    // Create a MIDI port
+    int port = snd_seq_create_simple_port(midi, "Gamepad", SND_SEQ_PORT_CAP_READ|SND_SEQ_PORT_CAP_SUBS_READ, SND_SEQ_PORT_TYPE_MIDI_GENERIC);
+
 
 	while (1) {
 		/* Read joystick events */
@@ -180,9 +188,34 @@ int main(int argc, char **argv) {
 					break;
 			}
 		}
+
+		if (js.type == JS_EVENT_BUTTON) {
+            snd_seq_event_t midi_event;
+            snd_seq_ev_clear(&midi_event);
+            snd_seq_ev_set_source(&midi_event, port);
+            snd_seq_ev_set_subs(&midi_event);
+            snd_seq_ev_set_direct(&midi_event);
+
+			if (js.value != 0) {
+				midi_event.type = SND_SEQ_EVENT_NOTEON;
+				midi_event.data.note.channel = 0;
+				midi_event.data.note.note = 60;
+				midi_event.data.note.velocity = 127;
+			} else {
+				midi_event.type = SND_SEQ_EVENT_NOTEOFF;
+				midi_event.data.note.channel = 0;
+				midi_event.data.note.note = 60;
+				midi_event.data.note.velocity = 0;
+			}
+            snd_seq_event_output(midi, &midi_event);
+            snd_seq_drain_output(midi);
+		}
+
+
 		/* Sleep for a short while to prevent busy waiting */
 		usleep(1000);
 	}
 	jack_client_close(client);
+    snd_seq_close(midi);
     exit(0);
 }
