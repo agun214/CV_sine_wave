@@ -211,7 +211,6 @@ int main(int argc, char **argv) {
             snd_seq_drain_output(midi);
 		}
 
-
 		/* Sleep for a short while to prevent busy waiting */
 		usleep(1000);
 	}
